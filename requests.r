@@ -2,6 +2,11 @@ library(httr)
 
 user <- Sys.getenv("GITHUB_USER")
 pwd <- Sys.getenv("GITHUB_PASS")
+
+user <- "albertotb"
+pwd <- "DUgf6Pr5"
+
+
 if (user == "" || pwd == "") {
   stop("Set GITHUB_USER and GITHUB_PASS env vars", call. = FALSE)
 }

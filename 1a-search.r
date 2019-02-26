@@ -1,20 +1,21 @@
-library(lubridate)
 library(plyr)
+library(lubridate)
 source("requests.r")
 
 search_repo <- function(query, page = NULL) {
   Sys.sleep(12)
   path <- paste0(base, "/search/repositories")
   qs <- list(q = paste("language:r", query), per_page = 100, page = page)
-  
   req <- GET(path, config, query = qs)
   c <- content(req)
+  
   if (req$status_code != 200) {
     browser()
     stop(c$message, call. = FALSE)
   }
   
-  n <- c$total_count
+  # Github API has a limit of 1000 search results
+  n <- min(c$total_count, 1000)
   items <- c$items
   
   # Only one page of results
@@ -24,8 +25,8 @@ search_repo <- function(query, page = NULL) {
   }
   
   # Multiple pages of results
-  if (n > 1000) {
-    warning(n , " repos. Only first 1000 returned", call. = FALSE)
+  if (n > 100) {
+    warning(n , " repos. Only first 100 returned", call. = FALSE)
   } else {
     message(n, " repos")
   }
@@ -48,7 +49,7 @@ get_month <- function(year, month) {
   if (file.exists(cache_path)) return(readRDS(cache_path))
   
   message("Downloading repos created in ", year, "-", month)
-  query <- paste0("created:", year, "-", month - 1, "..", year, "-", month)
+  query <- paste0("created:", ymd(paste(year, month, 1, sep="-")), "..", ymd(paste(year, month+1, 1, sep="-")))
   results <- search_repo(query)
   
   saveRDS(results, cache_path)
@@ -65,11 +66,37 @@ all_months <- function() {
   unlist(mlply(all, get_month), recursive = FALSE)
 }
 
-repos <- c(prehistory, all_months())
+
+get_range <- function(start, end) {
+
+  cache_path <- paste0("cache/", start, "_", end, ".rds")
+  if (file.exists(cache_path)) return(readRDS(cache_path))
+  
+  message("Downloading repos from ", start, " to ", end)
+  query <- paste0("created:", start, "..", end)
+  results <- search_repo(query)
+  
+  saveRDS(results, cache_path)
+  results
+}
+
+
+all_weeks <- function(year) {
+  first <- ymd(paste0(year, "-01-01"))
+  last  <- ymd(paste0(year, "-12-31"))
+  start <- seq(from=first, to=last, by='week')
+  end <- start - 1
+  end[length(end)] <- last
+  all <- data.frame(start=start[-length(start)], end=end[-1])
+  unlist(mlply(all, get_range), recursive = FALSE)
+}
+
+year <- 2015
+repos <- all_weeks(year)
 forks <- sapply(repos, "[[", "fork")
 
 names <- unique(unname(sapply(repos, "[[", "full_name")))
-saveRDS(names, "repos.rds")
+saveRDS(names, paste0("repos", year, ".rds"))
 
 # Distribution of repo counts
 
